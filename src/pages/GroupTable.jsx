@@ -48,7 +48,7 @@ export default function GroupTable() {
         <div className="tablebox">
           <table>
             <thead>
-              <tr><th>품목</th><th>담당자</th><th>수량</th><th>준비 완료</th><th>메모</th>{isOwner && <th><span className="sr">삭제</span></th>}</tr>
+              <tr><th className="c-name">품목</th><th className="c-who">담당자</th><th className="c-qty">수량</th><th className="c-done">준비 완료</th><th className="c-memo">메모</th>{isOwner && <th className="c-del"><span className="sr">삭제</span></th>}</tr>
             </thead>
             <tbody>
               {items.length === 0 && (
@@ -79,18 +79,20 @@ export default function GroupTable() {
                     <td className="num">{canEdit
                       ? <NumCell id={`q-${it.id}`} label={`${it.name} 수량`} value={it.qty} onSave={(v) => save(it.id, { qty: v })} />
                       : it.qty}</td>
-                    <td>
-                      {canEdit && (
-                        <input type="checkbox" id={`d-${it.id}`} checked={!!it.done} aria-label={`${it.name} 준비 완료`}
-                          onChange={(e) => save(it.id, { done: e.target.checked })} />
-                      )}{' '}
-                      <span className={it.done ? 'done' : 'todo'}>{it.done ? '완료' : '준비 중'}</span>
+                    <td className="c-done">
+                      <label className={`status ${it.done ? 'done' : 'todo'}`} htmlFor={canEdit ? `d-${it.id}` : undefined}>
+                        {canEdit && (
+                          <input type="checkbox" id={`d-${it.id}`} checked={!!it.done}
+                            onChange={(e) => save(it.id, { done: e.target.checked })} />
+                        )}
+                        {it.done ? '완료' : '준비 중'}
+                      </label>
                     </td>
                     <td>{canEdit
                       ? <TextCell id={`m-${it.id}`} label={`${it.name} 메모`} value={it.memo} max={200} onSave={(v) => save(it.id, { memo: v })} />
                       : <span className="muted">{it.memo}</span>}</td>
                     {isOwner && (
-                      <td><button type="button" className="link" onClick={() => deleteItem(gid, it.id).catch((e) => setMsg(e.message))}>삭제</button></td>
+                      <td className="c-del"><button type="button" className="link" onClick={() => deleteItem(gid, it.id).catch((e) => setMsg(e.message))}>삭제</button></td>
                     )}
                   </tr>
                 );
