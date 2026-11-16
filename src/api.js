@@ -1,6 +1,6 @@
 import {
   collection, collectionGroup, doc, getDoc, getDocs, onSnapshot, query, where, orderBy,
-  serverTimestamp, Timestamp, writeBatch, updateDoc, setDoc, deleteDoc, addDoc,
+  serverTimestamp, Timestamp, getCountFromServer, writeBatch, updateDoc, setDoc, deleteDoc, addDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { formatTrip } from './dates';
@@ -50,7 +50,12 @@ export function watchMyGroups(uid, cb, onError) {
       const gid = m.ref.parent.parent.id;
       const g = await getDoc(doc(db, 'groups', gid)).catch(() => null);
       if (!g || !g.exists()) return null;
-      return { id: gid, role: m.data().role, ...g.data() };
+      const items = collection(db, 'groups', gid, 'items');
+      const [total, done] = await Promise.all([
+        getCountFromServer(items).then((c) => c.data().count).catch(() => null),
+        getCountFromServer(query(items, where('done', '==', true))).then((c) => c.data().count).catch(() => null),
+      ]);
+      return { id: gid, role: m.data().role, total, done, ...g.data() };
     }));
     cb(rows.filter(Boolean).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
   }, onError);

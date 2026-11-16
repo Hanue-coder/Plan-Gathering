@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import { useAuth } from '../auth';
 import { useGroup } from '../useGroup';
+import MemberProgress from '../components/MemberProgress';
+import { dDay } from '../dates';
 import { ROLE_LABEL, addItem, deleteItem, leaveGroup, updateItem } from '../api';
 
 export default function GroupTable() {
@@ -39,6 +41,10 @@ export default function GroupTable() {
           <span className={`role ${role === 'reader' ? 'reader' : ''}`}>{ROLE_LABEL[role]}</span>
           {isOwner && <Link className="link" to={`/g/${gid}/members`}>멤버 관리</Link>}
         </div>
+        {group.date && (
+          <p className="muted trip-line">{group.date}{group.startDate && <span className="dday">{dDay(group.startDate, group.nights)}</span>}</p>
+        )}
+        <MemberProgress items={items} members={members} myUid={user.uid} />
         <p className="muted">
           {isOwner && '모임장은 모든 칸을 고치고 항목을 추가·삭제할 수 있어요. 담당자는 쓰기 멤버 중에서 고를 수 있어요.'}
           {role === 'writer' && '노란 줄이 내 담당이에요. 내 줄의 수량, 준비 완료, 메모만 고칠 수 있어요.'}
