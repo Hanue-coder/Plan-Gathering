@@ -2,8 +2,10 @@ rules_version = '2';
 
 // 권한 요약
 // - 모임장(owner): 모임 정보·양식·항목·멤버 권한을 모두 관리
-// - 쓰기 멤버(writer): 본인에게 할당된 항목의 수량·준비 완료·메모만 수정
-// - 읽기 멤버(reader): 읽기만 가능
+// - 쓰기 멤버(writer): 본인에게 할당된 공용 항목의 수량·준비 완료·메모 수정,
+//                      담당 미정인 공용 항목 가져가기(내가 가져갈게)와 놓기
+// - 읽기 멤버(reader): 읽기 + 개인 준비물의 본인 칸 체크
+// - 개인 준비물의 체크는 누구든(모임장 포함) 본인 칸만 바꿀 수 있음
 // - 모임 멤버가 아니면 그 모임의 어떤 내용도 읽을 수 없음
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -99,9 +101,16 @@ service cloud.firestore {
         );
       }
 
+      // 준비물 항목은 두 종류예요.
+      // - 공용(kind 없음 또는 'shared'): 담당자 한 명이 챙김
+      // - 개인('personal'): 멤버 모두가 각자 챙기고, checks 맵에 {사용자: true/false}로 기록
       match /items/{itemId} {
-        function validItem(d) {
-          return d.keys().hasOnly(['name', 'assigneeUid', 'qty', 'done', 'memo', 'order', 'updatedAt'])
+        function isPersonal(d) {
+          return 'kind' in d && d.kind == 'personal';
+        }
+        function validShared(d) {
+          return d.keys().hasOnly(['name', 'kind', 'assigneeUid', 'qty', 'done', 'memo', 'order', 'updatedAt'])
+            && (!('kind' in d) || d.kind == 'shared')
             && shortString(d.name, 1, 80)
             && (d.assigneeUid == null || d.assigneeUid is string)
             && d.qty is int && d.qty >= 0 && d.qty <= 9999
@@ -109,18 +118,64 @@ service cloud.firestore {
             && shortString(d.memo, 0, 200)
             && d.order is number;
         }
+        function validPersonal(d) {
+          return d.keys().hasOnly(['name', 'kind', 'checks', 'order', 'updatedAt'])
+            && d.kind == 'personal'
+            && shortString(d.name, 1, 80)
+            && d.checks is map && d.checks.size() <= 100
+            && d.order is number;
+        }
+        function changed() {
+          return request.resource.data.diff(resource.data).affectedKeys();
+        }
+        // 공용 항목: 담당 미정인 항목을 내가 가져가기 (모임장, 쓰기 멤버)
+        function claiming() {
+          return isMember(gid) && myRole(gid) in ['owner', 'writer']
+            && resource.data.assigneeUid == null
+            && request.resource.data.assigneeUid == request.auth.uid
+            && changed().hasOnly(['assigneeUid', 'updatedAt']);
+        }
+        // 공용 항목: 내가 맡은 항목 놓기 (쓰기 멤버)
+        function releasing() {
+          return isMember(gid) && myRole(gid) == 'writer'
+            && resource.data.assigneeUid == request.auth.uid
+            && request.resource.data.assigneeUid == null
+            && changed().hasOnly(['assigneeUid', 'updatedAt']);
+        }
+        // 개인 항목: 모임 멤버는 누구나(읽기 멤버 포함) 자기 칸만 체크
+        function checkingMine() {
+          return isMember(gid)
+            && changed().hasOnly(['checks', 'updatedAt'])
+            && request.resource.data.checks.diff(resource.data.checks).affectedKeys().hasOnly([request.auth.uid])
+            && request.resource.data.checks[request.auth.uid] is bool;
+        }
+        // 모임을 만드는 같은 배치에서 템플릿 항목을 함께 만들 때
+        function creatingGroupNow() {
+          return signedIn() && !exists(groupPath(gid))
+            && getAfter(groupPath(gid)).data.ownerUid == request.auth.uid;
+        }
 
         allow read: if isMember(gid);
-        allow create, delete: if isOwner(gid)
-          && (request.method == 'delete' || validItem(request.resource.data));
-        allow update: if validItem(request.resource.data) && (
-          isOwner(gid)
-          || (isMember(gid)
-            && myRole(gid) == 'writer'
-            && resource.data.assigneeUid == request.auth.uid
-            && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['qty', 'done', 'memo', 'updatedAt']))
-        );
+        allow create: if (isOwner(gid) || creatingGroupNow())
+          && (validShared(request.resource.data)
+              || (validPersonal(request.resource.data) && request.resource.data.checks.size() == 0));
+        allow delete: if isOwner(gid);
+        allow update: if
+          // 공용 항목
+          (!isPersonal(resource.data) && validShared(request.resource.data) && (
+            isOwner(gid)
+            || claiming()
+            || releasing()
+            || (isMember(gid)
+                && myRole(gid) == 'writer'
+                && resource.data.assigneeUid == request.auth.uid
+                && changed().hasOnly(['qty', 'done', 'memo', 'updatedAt']))
+          ))
+          // 개인 항목: 이름·순서는 모임장만, 체크는 본인 칸만
+          || (isPersonal(resource.data) && validPersonal(request.resource.data) && (
+            checkingMine()
+            || (isOwner(gid) && request.resource.data.checks == resource.data.checks)
+          ));
       }
     }
 
