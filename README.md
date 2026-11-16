@@ -30,3 +30,15 @@ npm run test:rules   # 보안 규칙 테스트 (Java 필요, Firestore 에뮬레
 npx firebase login   # 배포 전에 한 번
 npm run deploy       # 빌드 후 Hosting, 보안 규칙, 인덱스를 함께 배포
 ```
+
+## 자동 배포
+
+`main`에 코드가 올라가면 GitHub Actions(`.github/workflows/deploy.yml`)가 테스트 후 자동으로 배포합니다. 사이트 주소는 https://plan-and-gathering.web.app 입니다.
+
+배포 준비 (처음 한 번):
+
+1. Firebase 콘솔 → 톱니바퀴 → 프로젝트 설정 → **서비스 계정** → **새 비공개 키 생성** → JSON 파일 다운로드
+2. GitHub 저장소 → Settings → Secrets and variables → Actions → **New repository secret**
+   - Name: `FIREBASE_SERVICE_ACCOUNT`
+   - Secret: 다운로드한 JSON 파일 내용 전체
+3. 다운로드한 JSON 파일은 비밀번호와 같으니 다른 곳에 공유하지 말고 지워 주세요.
