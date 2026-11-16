@@ -3,6 +3,7 @@ import {
   serverTimestamp, Timestamp, writeBatch, updateDoc, setDoc, deleteDoc, addDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { formatTrip } from './dates';
 
 export const DEFAULT_COLUMNS = [
   { key: 'name', label: '품목' },
@@ -17,12 +18,14 @@ export const ROLE_LABEL = { owner: '모임장', writer: '쓰기 멤버', reader:
 const displayName = (user) => (user.displayName || user.email || '이름 없음').slice(0, 60);
 
 /** 모임을 만들고, 만든 사람을 모임장으로 등록 */
-export async function createGroup(user, { name, date, place }) {
+export async function createGroup(user, { name, startDate, nights, place }) {
   const groupRef = doc(collection(db, 'groups'));
   const batch = writeBatch(db);
   batch.set(groupRef, {
     name: name.trim(),
-    date: date.trim(),
+    date: formatTrip(startDate, nights),
+    startDate: startDate || '',
+    nights: startDate ? nights : 0,
     place: place.trim(),
     ownerUid: user.uid,
     columns: DEFAULT_COLUMNS,

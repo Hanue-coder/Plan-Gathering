@@ -43,6 +43,18 @@ describe('모임 만들기', () => {
     b.set(doc(f, 'groups', 'new', 'members', 'alice'), { uid: 'alice', role: 'owner', name: 'Alice' });
     await assertSucceeds(b.commit());
   });
+  it('출발일과 몇박몇일을 함께 저장할 수 있고, 잘못된 값은 거부된다', async () => {
+    const f = db('alice');
+    const make = (id, extra) => {
+      const b = writeBatch(f);
+      b.set(doc(f, 'groups', id), { name: '캠핑', date: '', place: '', ownerUid: 'alice', columns: [], ...extra });
+      b.set(doc(f, 'groups', id, 'members', 'alice'), { uid: 'alice', role: 'owner', name: 'Alice' });
+      return b.commit();
+    };
+    await assertSucceeds(make('g1', { startDate: '2026-11-28', nights: 1 }));
+    await assertFails(make('g2', { startDate: '11월 28일', nights: 1 }));
+    await assertFails(make('g3', { startDate: '2026-11-28', nights: -1 }));
+  });
   it('모임장 문서 없이 모임만 만들 수는 없다', async () => {
     await assertFails(setDoc(doc(db('alice'), 'groups', 'new'), { name: '등산', date: '', place: '', ownerUid: 'alice', columns: [] }));
   });

@@ -37,9 +37,11 @@ service cloud.firestore {
 
     match /groups/{gid} {
       function validGroup(d) {
-        return d.keys().hasOnly(['name', 'date', 'place', 'ownerUid', 'columns', 'createdAt'])
+        return d.keys().hasOnly(['name', 'date', 'startDate', 'nights', 'place', 'ownerUid', 'columns', 'createdAt'])
           && shortString(d.name, 1, 60)
-          && shortString(d.date, 0, 40)
+          && shortString(d.date, 0, 60)
+          && (!('startDate' in d) || d.startDate == '' || d.startDate.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}'))
+          && (!('nights' in d) || (d.nights is int && d.nights >= 0 && d.nights <= 30))
           && shortString(d.place, 0, 60)
           && d.ownerUid is string
           && d.columns is list && d.columns.size() <= 20;
