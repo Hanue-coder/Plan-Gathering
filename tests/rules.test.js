@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import {
-  collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, query, setDoc, Timestamp, updateDoc, where, writeBatch,
+  collection, collectionGroup, getCountFromServer, deleteDoc, doc, getDoc, getDocs, query, setDoc, Timestamp, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 
 let env;
@@ -69,6 +69,10 @@ describe('읽기', () => {
     await assertSucceeds(getDoc(doc(f, 'groups', GID)));
     await assertSucceeds(getDocs(collection(f, 'groups', GID, 'members')));
     await assertSucceeds(getDocs(collection(f, 'groups', GID, 'items')));
+  });
+  it('멤버는 준비물 개수를 셀 수 있고, 멤버가 아니면 못 센다', async () => {
+    await assertSucceeds(getCountFromServer(collection(db('reader'), 'groups', GID, 'items')));
+    await assertFails(getCountFromServer(collection(db('stranger'), 'groups', GID, 'items')));
   });
   it('멤버가 아니면 아무것도 읽을 수 없다', async () => {
     const f = db('stranger');

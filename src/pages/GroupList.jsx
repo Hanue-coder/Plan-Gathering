@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import { useAuth } from '../auth';
 import { ROLE_LABEL, watchMyGroups } from '../api';
+import { dDay } from '../dates';
+import { percent } from '../progress';
 
 export default function GroupList() {
   const { user } = useAuth();
@@ -22,9 +24,18 @@ export default function GroupList() {
         <div className="list">
           {groups && groups.map((g) => (
             <Link key={g.id} className="group" to={`/g/${g.id}`}>
-              <span>
-                <b>{g.name}</b><br />
+              <span className="group-main">
+                <span className="group-title">
+                  <b>{g.name}</b>
+                  {g.startDate && <span className="dday">{dDay(g.startDate, g.nights)}</span>}
+                </span>
                 <span className="muted">{[g.date, g.place].filter(Boolean).join(' · ') || '날짜 미정'}</span>
+                {g.total != null && (
+                  <span className="group-progress">
+                    <span className="meter" aria-hidden="true"><i style={{ width: `${percent(g.done || 0, g.total)}%` }} /></span>
+                    <span className="muted">{g.total ? `${g.done} / ${g.total} 준비 완료` : '준비물 없음'}</span>
+                  </span>
+                )}
               </span>
               <span className={`role ${g.role === 'reader' ? 'reader' : ''}`}>{ROLE_LABEL[g.role]}</span>
             </Link>

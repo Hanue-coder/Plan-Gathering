@@ -27,3 +27,19 @@ export function formatTrip(startDate, nights) {
 }
 
 export const NIGHT_OPTIONS = [0, 1, 2, 3, 4, 5, 6];
+
+/** 사용자의 현지 날짜 'YYYY-MM-DD' */
+export function todayLocal(now = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+}
+
+/** 출발까지 남은 날: 'D-12', 'D-DAY', 진행 중이면 '진행 중', 끝났으면 '종료' */
+export function dDay(startDate, nights = 0, today = todayLocal()) {
+  if (!startDate) return '';
+  const diff = Math.round((Date.parse(`${startDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 864e5);
+  if (diff > 0) return `D-${diff}`;
+  if (diff === 0) return 'D-DAY';
+  if (-diff <= nights) return '진행 중';
+  return '종료';
+}

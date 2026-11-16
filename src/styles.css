@@ -122,3 +122,25 @@ td select { border: 1px solid var(--line); border-radius: 6px; padding: 4px; bac
   .c-del { width: 48px; }
   th, td { padding: 8px 6px; }
 }
+
+/* 준비 현황 */
+.dday {
+  display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--accent-soft); color: var(--accent); font-variant-numeric: tabular-nums; vertical-align: 1px;
+}
+.trip-line { margin: -6px 0 0; }
+.people { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.person { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
+.person.is-me { border-color: var(--accent); }
+.person.is-warn { border-color: var(--warn); border-style: dashed; }
+.person.is-warn .count { color: var(--warn); }
+.person-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.person-head b { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.count { font-family: var(--font-head); font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.person .meter { min-width: 0; flex: none; }
+.person.is-done .meter i { background: var(--ok); }
+.left { margin: 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.group-main { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.group-title { display: flex; align-items: center; flex-wrap: wrap; }
+.group-progress { display: flex; align-items: center; gap: 10px; }
+.group-progress .meter { max-width: 220px; }
