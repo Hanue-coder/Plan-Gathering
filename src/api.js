@@ -18,7 +18,7 @@ export const ROLE_LABEL = { owner: '모임장', writer: '쓰기 멤버', reader:
 const displayName = (user) => (user.displayName || user.email || '이름 없음').slice(0, 60);
 
 /** 모임을 만들고, 만든 사람을 모임장으로 등록 */
-export async function createGroup(user, { name, startDate, nights, place }) {
+export async function createGroup(user, { name, startDate, nights, place }, templateItems = []) {
   const groupRef = doc(collection(db, 'groups'));
   const batch = writeBatch(db);
   batch.set(groupRef, {
@@ -38,6 +38,9 @@ export async function createGroup(user, { name, startDate, nights, place }) {
     photoURL: user.photoURL || null,
     joinedAt: serverTimestamp(),
   });
+  templateItems.forEach((it) => {
+    batch.set(doc(collection(groupRef, 'items')), itemDoc(it.kind, it.name, it.order, it.qty));
+  });
   await batch.commit();
   return groupRef.id;
 }
@@ -51,10 +54,13 @@ export function watchMyGroups(uid, cb, onError) {
       const g = await getDoc(doc(db, 'groups', gid)).catch(() => null);
       if (!g || !g.exists()) return null;
       const items = collection(db, 'groups', gid, 'items');
-      const [total, done] = await Promise.all([
-        getCountFromServer(items).then((c) => c.data().count).catch(() => null),
-        getCountFromServer(query(items, where('done', '==', true))).then((c) => c.data().count).catch(() => null),
+      const count = (q) => getCountFromServer(q).then((c) => c.data().count).catch(() => null);
+      const [all, personal, done] = await Promise.all([
+        count(items),
+        count(query(items, where('kind', '==', 'personal'))),
+        count(query(items, where('done', '==', true))),
       ]);
+      const total = all == null || personal == null ? null : all - personal; // 공용 준비물만 센다
       return { id: gid, role: m.data().role, total, done, ...g.data() };
     }));
     cb(rows.filter(Boolean).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
@@ -75,10 +81,40 @@ export function watchItems(gid, cb, onError) {
     (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
 }
 
-export function addItem(gid, order) {
-  return addDoc(collection(db, 'groups', gid, 'items'), {
-    name: '새 준비물', assigneeUid: null, qty: 1, done: false, memo: '', order, updatedAt: serverTimestamp(),
-  });
+/** 항목 문서 모양: 공용은 담당자·수량·완료·메모, 개인은 사람별 체크 */
+function itemDoc(kind, name, order, qty = 1) {
+  if (kind === 'personal') {
+    return { name, kind: 'personal', checks: {}, order, updatedAt: serverTimestamp() };
+  }
+  return { name, kind: 'shared', assigneeUid: null, qty, done: false, memo: '', order, updatedAt: serverTimestamp() };
+}
+
+export function addItem(gid, order, kind = 'shared') {
+  const name = kind === 'personal' ? '새 개인 준비물' : '새 공용 준비물';
+  return addDoc(collection(db, 'groups', gid, 'items'), itemDoc(kind, name, order));
+}
+
+/** 담당 미정인 공용 준비물을 내가 가져가기 / 내가 맡은 것 놓기 */
+export function claimItem(gid, itemId, uid) {
+  return updateDoc(doc(db, 'groups', gid, 'items', itemId), { assigneeUid: uid, updatedAt: serverTimestamp() });
+}
+export function releaseItem(gid, itemId) {
+  return updateDoc(doc(db, 'groups', gid, 'items', itemId), { assigneeUid: null, updatedAt: serverTimestamp() });
+}
+
+/** 개인 준비물에서 내 칸만 체크 (보안 규칙도 같은 제한을 둠) */
+export function setMyCheck(gid, itemId, uid, value) {
+  return updateDoc(doc(db, 'groups', gid, 'items', itemId), { [`checks.${uid}`]: value, updatedAt: serverTimestamp() });
+}
+
+/** 지난 모임의 준비물 이름만 가져오기 (담당·체크 기록은 비움) */
+export async function copyItemsFrom(gid) {
+  const snap = await getDocs(query(collection(db, 'groups', gid, 'items'), orderBy('order')));
+  const rows = snap.docs.map((d) => d.data());
+  return {
+    shared: rows.filter((r) => r.kind !== 'personal').map((r) => ({ name: r.name, qty: r.qty || 1 })),
+    personal: rows.filter((r) => r.kind === 'personal').map((r) => r.name),
+  };
 }
 
 /** 항목 수정. 쓰기 멤버는 qty/done/memo만 보낼 수 있음 (규칙에서 검사) */

@@ -30,6 +30,8 @@ beforeEach(async () => {
       await setDoc(doc(f, 'groups', GID, 'members', uid), { uid, role, name: uid });
     }
     await setDoc(doc(f, 'groups', GID, 'items', 'tent'), item());
+    await setDoc(doc(f, 'groups', GID, 'items', 'lamp'), item({ name: '랜턴', assigneeUid: null }));
+    await setDoc(doc(f, 'groups', GID, 'items', 'bag'), { name: '침낭', kind: 'personal', checks: { owner: true }, order: 9 });
     await setDoc(doc(f, 'invites', 'GOODCODE'), { groupId: GID, createdBy: 'owner', expiresAt: future() });
     await setDoc(doc(f, 'invites', 'OLDCODE'), { groupId: GID, createdBy: 'owner', expiresAt: past() });
   });
@@ -119,6 +121,90 @@ describe('준비물 항목', () => {
   it('잘못된 값은 거부된다', async () => {
     await assertFails(updateDoc(doc(db('writer'), 'groups', GID, 'items', 'tent'), { qty: -1 }));
     await assertFails(updateDoc(doc(db('writer'), 'groups', GID, 'items', 'tent'), { done: 'yes' }));
+  });
+});
+
+describe('내가 가져갈게 (공용 항목)', () => {
+  const lamp = (uid) => doc(db(uid), 'groups', GID, 'items', 'lamp');
+  it('쓰기 멤버는 담당 미정 항목을 가져갈 수 있다', async () => {
+    await assertSucceeds(updateDoc(lamp('writer'), { assigneeUid: 'writer' }));
+  });
+  it('모임장도 가져갈 수 있다', async () => {
+    await assertSucceeds(updateDoc(lamp('owner'), { assigneeUid: 'owner' }));
+  });
+  it('읽기 멤버는 가져갈 수 없다', async () => {
+    await assertFails(updateDoc(lamp('reader'), { assigneeUid: 'reader' }));
+  });
+  it('남의 이름으로 가져가기는 안 된다', async () => {
+    await assertFails(updateDoc(lamp('writer'), { assigneeUid: 'writer2' }));
+  });
+  it('이미 담당이 있는 항목은 가져갈 수 없다', async () => {
+    await assertFails(updateDoc(doc(db('writer2'), 'groups', GID, 'items', 'tent'), { assigneeUid: 'writer2' }));
+  });
+  it('가져가면서 다른 칸을 같이 바꿀 수 없다', async () => {
+    await assertFails(updateDoc(lamp('writer'), { assigneeUid: 'writer', qty: 99 }));
+  });
+  it('내가 맡은 항목은 놓을 수 있고, 남의 항목은 못 놓는다', async () => {
+    await assertSucceeds(updateDoc(doc(db('writer'), 'groups', GID, 'items', 'tent'), { assigneeUid: null }));
+    await assertFails(updateDoc(doc(db('writer2'), 'groups', GID, 'items', 'bag'), { assigneeUid: null }));
+  });
+});
+
+describe('개인 준비물', () => {
+  const bag = (uid) => doc(db(uid), 'groups', GID, 'items', 'bag');
+  it('쓰기 멤버와 읽기 멤버 모두 자기 칸을 체크할 수 있다', async () => {
+    await assertSucceeds(updateDoc(bag('writer'), { 'checks.writer': true }));
+    await assertSucceeds(updateDoc(bag('reader'), { 'checks.reader': true }));
+  });
+  it('모임장도 자기 칸만 체크할 수 있다', async () => {
+    await assertSucceeds(updateDoc(bag('owner'), { 'checks.owner': false }));
+    await assertFails(updateDoc(bag('owner'), { 'checks.writer': true }));
+  });
+  it('다른 사람 칸은 아무도 바꿀 수 없다', async () => {
+    await assertFails(updateDoc(bag('writer'), { 'checks.reader': true }));
+    await assertFails(updateDoc(bag('reader'), { 'checks.owner': false }));
+  });
+  it('여러 칸을 한꺼번에 바꾸거나 값이 true/false가 아니면 거부된다', async () => {
+    await assertFails(updateDoc(bag('writer'), { 'checks.writer': true, 'checks.reader': true }));
+    await assertFails(updateDoc(bag('writer'), { 'checks.writer': 'yes' }));
+  });
+  it('멤버가 아니면 체크할 수 없다', async () => {
+    await assertFails(updateDoc(bag('stranger'), { 'checks.stranger': true }));
+  });
+  it('이름과 순서는 모임장만 바꿀 수 있다 (체크는 그대로)', async () => {
+    await assertSucceeds(updateDoc(bag('owner'), { name: '침낭(겨울용)' }));
+    await assertFails(updateDoc(bag('writer'), { name: '바꿈' }));
+  });
+  it('모임장은 개인 항목을 추가, 삭제할 수 있고 새 항목의 체크는 비어 있어야 한다', async () => {
+    const f = db('owner');
+    await assertSucceeds(setDoc(doc(f, 'groups', GID, 'items', 'new1'), { name: '우비', kind: 'personal', checks: {}, order: 10 }));
+    await assertFails(setDoc(doc(f, 'groups', GID, 'items', 'new2'), { name: '우비', kind: 'personal', checks: { writer: true }, order: 11 }));
+    await assertSucceeds(deleteDoc(doc(f, 'groups', GID, 'items', 'bag')));
+  });
+  it('쓰기 멤버는 개인 항목을 추가, 삭제할 수 없다', async () => {
+    const f = db('writer');
+    await assertFails(setDoc(doc(f, 'groups', GID, 'items', 'new3'), { name: '우비', kind: 'personal', checks: {}, order: 10 }));
+    await assertFails(deleteDoc(doc(f, 'groups', GID, 'items', 'bag')));
+  });
+});
+
+describe('템플릿으로 모임 만들기', () => {
+  it('모임 생성과 같은 배치에서 템플릿 항목을 함께 만들 수 있다', async () => {
+    const f = db('alice');
+    const b = writeBatch(f);
+    b.set(doc(f, 'groups', 'tpl'), { name: '캠핑', date: '', place: '', ownerUid: 'alice', columns: [] });
+    b.set(doc(f, 'groups', 'tpl', 'members', 'alice'), { uid: 'alice', role: 'owner', name: 'Alice' });
+    for (let i = 0; i < 15; i++) {
+      b.set(doc(f, 'groups', 'tpl', 'items', 's' + i), { name: '공용' + i, kind: 'shared', assigneeUid: null, qty: 1, done: false, memo: '', order: i });
+    }
+    for (let i = 0; i < 6; i++) {
+      b.set(doc(f, 'groups', 'tpl', 'items', 'p' + i), { name: '개인' + i, kind: 'personal', checks: {}, order: 20 + i });
+    }
+    await assertSucceeds(b.commit());
+  });
+  it('이미 있는 남의 모임에는 템플릿 항목을 넣을 수 없다', async () => {
+    await assertFails(setDoc(doc(db('mallory'), 'groups', GID, 'items', 'x'),
+      { name: '침입', kind: 'shared', assigneeUid: null, qty: 1, done: false, memo: '', order: 1 }));
   });
 });
 
