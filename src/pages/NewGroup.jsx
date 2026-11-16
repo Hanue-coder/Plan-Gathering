@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import { useAuth } from '../auth';
 import { DEFAULT_COLUMNS, createGroup } from '../api';
+import { NIGHT_OPTIONS, formatTrip, nightsLabel } from '../dates';
 
 export default function NewGroup() {
   const { user } = useAuth();
   const nav = useNavigate();
-  const [form, setForm] = useState({ name: '', date: '', place: '' });
+  const [form, setForm] = useState({ name: '', startDate: '', nights: 1, place: '' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -31,8 +32,15 @@ export default function NewGroup() {
       <form className="screen" onSubmit={submit}>
         <div className="field"><label htmlFor="g-name">모임 이름</label>
           <input id="g-name" maxLength={60} placeholder="예: 가을 캠핑" value={form.name} onChange={set('name')} /></div>
-        <div className="field"><label htmlFor="g-date">날짜</label>
-          <input id="g-date" maxLength={40} placeholder="예: 2026-11-28 ~ 29" value={form.date} onChange={set('date')} /></div>
+        <div className="daterow">
+          <div className="field"><label htmlFor="g-date">출발일</label>
+            <input id="g-date" type="date" value={form.startDate} onChange={set('startDate')} /></div>
+          <div className="field"><label htmlFor="g-nights">일정</label>
+            <select id="g-nights" value={form.nights} onChange={(e) => setForm({ ...form, nights: Number(e.target.value) })}>
+              {NIGHT_OPTIONS.map((n) => <option key={n} value={n}>{nightsLabel(n)}</option>)}
+            </select></div>
+        </div>
+        {form.startDate && <p className="muted trip">{formatTrip(form.startDate, form.nights)}</p>}
         <div className="field"><label htmlFor="g-place">장소</label>
           <input id="g-place" maxLength={60} placeholder="예: 가평" value={form.place} onChange={set('place')} /></div>
         <div className="field"><span className="label">준비물 표의 칸 (양식)</span>
